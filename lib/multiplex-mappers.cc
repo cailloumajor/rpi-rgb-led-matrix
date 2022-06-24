@@ -454,6 +454,58 @@ public:
   }
 };
 
+class CustomMixedMultiplexMapper : public MultiplexMapperBase {
+public:
+  CustomMixedMultiplexMapper() : MultiplexMapperBase("CustomMixed", 2) {}
+
+  void MapSinglePanel(int x, int y, int *matrix_x, int *matrix_y) const {}
+
+  // Taken from SpiralMultiplexMapper
+  void MapSinglePanelFirstRow(int x, int y, int *matrix_x, int *matrix_y) const {
+    const bool is_top_stripe = (y % (panel_rows_/2)) < panel_rows_/4;
+    const int panel_quarter = panel_cols_/4;
+    const int quarter = x / panel_quarter;
+    const int offset = x % panel_quarter;
+    *matrix_x = ((2*quarter*panel_quarter)
+                 + (is_top_stripe
+                    ? panel_quarter - 1 - offset
+                    : panel_quarter + offset));
+    *matrix_y = ((y / (panel_rows_/2)) * (panel_rows_/4)
+                 + y % (panel_rows_/4));
+  }
+
+  // Same as ZStripeMultiplexMapper("ZnMirrorZStripe", 4, 4)
+  void MapSinglePanelSecondRow(int x, int y, int *matrix_x, int *matrix_y) const {
+    const int vert_block_is_odd = ((y / 4) % 2);
+
+    const int even_vblock_shift = (1 - vert_block_is_odd) * 4;
+    const int odd_vblock_shitf = vert_block_is_odd * 4;
+
+    *matrix_x = x + ((x + even_vblock_shift) / 8) * 8 + odd_vblock_shitf;
+    *matrix_y = (y % 4) + 4 * (y / (4 * 2));
+  }
+
+  void MapVisibleToMatrix(int matrix_width, int matrix_height,
+                          int visible_x, int visible_y,
+                          int *matrix_x, int *matrix_y)
+  const {
+    const int chained_panel  = visible_x / panel_cols_;
+    const int parallel_panel = visible_y / panel_rows_;
+
+    const int within_panel_x = visible_x % panel_cols_;
+    const int within_panel_y = visible_y % panel_rows_;
+
+    int new_x, new_y;
+    if (parallel_panel == 0) {
+      MapSinglePanelFirstRow(within_panel_x, within_panel_y, &new_x, &new_y);
+    } else {
+      MapSinglePanelSecondRow(within_panel_x, within_panel_y, &new_x, &new_y);
+    }
+    *matrix_x = chained_panel  * panel_stretch_factor_*panel_cols_ + new_x;
+    *matrix_y = parallel_panel * panel_rows_/panel_stretch_factor_ + new_y;
+  }
+};
+
 /*
  * Here is where the registration happens.
  * If you add an instance of the mapper here, it will automatically be
@@ -481,6 +533,7 @@ static MuxMapperList *CreateMultiplexMapperList() {
   result->push_back(new P8Outdoor1R1G1BMultiplexMapper());
   result->push_back(new FlippedStripeMultiplexMapper());
   result->push_back(new P10Outdoor32x16HalfScanMapper());
+  result->push_back(new CustomMixedMultiplexMapper()); // 19
   return result;
 }
 
